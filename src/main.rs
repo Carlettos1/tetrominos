@@ -16,6 +16,10 @@ type Matrix = Vec<Vec<char>>;
 const ALPHA: f64 = 3.0;
 
 fn main() {
+    tetrominos::run();
+}
+
+fn main2() {
     let mut pieces: HashMap<char, Vec<Piece>> = HashMap::new();
 
     // Define the tetrominoes pieces with their orientations
@@ -110,7 +114,8 @@ fn main() {
     let now = Instant::now();
     let mut output_file = File::create("BEST.txt").expect("Failed to create output file");
 
-    loop {
+    // 28 seg
+    for _ in 0..1_000_000 {
         if step % 500 == 0 {
             state = best.clone();
         }
