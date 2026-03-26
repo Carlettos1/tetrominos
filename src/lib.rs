@@ -13,6 +13,14 @@ use crate::{
 };
 
 const ALPHA: f64 = 3.0;
+/// how many steps needs to happen before a rollback (returning to the best previous state) occurs.
+const ROLLBACK_STEPS: usize = 501;
+
+/// how many steps needed to show the current and best state in console
+const N_TO_SHOW: usize = 10_000;
+
+/// how many steps needed for probabilities and beta to change
+const N_SCRAMBLE: usize = 5000;
 
 pub fn run() {
     // Initialize simulation parameters
@@ -20,7 +28,7 @@ pub fn run() {
     let mu = 25.0;
     let var = 30.0;
     let theta = var / mu;
-    let beta = rand_distr::Gamma::new(mu / theta, theta)
+    let mut beta = rand_distr::Gamma::new(mu / theta, theta)
         .unwrap()
         .sample(&mut rng);
 
@@ -40,18 +48,19 @@ pub fn run() {
 
     let now = Instant::now();
     let mut output_file = File::create("BEST.txt").expect("Failed to create output file");
+    let mut log_file = File::create("log.log").expect("Failed to create log file");
 
     for _ in 0..1_000_000 {
-        if step % 500 == 0 {
+        if step % ROLLBACK_STEPS == 0 {
             state = best.clone();
         }
 
         let m = Matrix::new(&state);
         let mut e: Option<f64> = None;
 
-        if step % 5000 == 0 {
+        if step % N_SCRAMBLE == 0 {
             let gamma = Gamma::new(mu / theta, theta).unwrap();
-            let beta = gamma.sample(&mut rng);
+            beta = gamma.sample(&mut rng);
 
             p_displace = rng.random::<f64>();
             p_rotate = rng.random::<f64>();
@@ -66,10 +75,6 @@ pub fn run() {
         }
 
         if !m.is_empty() {
-            if step % 100 == 0 {
-                clear_screen();
-            }
-
             e = Some(m.energy());
 
             if e_min.is_none() || e.unwrap() < e_min.unwrap() {
@@ -86,9 +91,10 @@ pub fn run() {
                 best_step = Some(step);
             }
 
-            if step % 100 == 0 {
+            if step % N_TO_SHOW == 0 {
+                clear_screen();
                 println!(
-                    "step {}: E/E0 = {} beta = {} probs = {} {} {} {}",
+                    "step {}: E/E0 = {:.2} beta = {:.2} probs = {:.2} {:.2} {:.2} {:.2}",
                     step,
                     e.unwrap() / e0,
                     beta,
@@ -119,7 +125,7 @@ pub fn run() {
 
             let m_best = Matrix::new(&best);
 
-            if step % 100 == 0 {
+            if step % N_TO_SHOW == 0 {
                 let empty_cells = m_best.empty_cells();
 
                 println!("Empty cells: {}", empty_cells);
@@ -146,6 +152,7 @@ pub fn run() {
                 || (f64::consts::E.ln().ln() as f64) < -beta * (new_e - e.unwrap_or(0.0)) / e0
             {
                 // Accept the move
+                writeln!(&mut log_file, "Removed {k}").expect("Couldn't write to log file?");
             } else {
                 state = state0;
             }
@@ -173,7 +180,7 @@ pub fn run() {
                 let shape = *shapes.choose(&mut rng).unwrap();
                 let orientation = rng.random_range(0..shape.get_rotations().len());
                 let x = rng.random_range(0..(WIDTH - shape.get_dim(orientation).0 + 1));
-                let y = rng.random_range(0..(HEIGHT - shape.get_dim(orientation).0 + 2));
+                let y = rng.random_range(0..(HEIGHT - shape.get_dim(orientation).1 + 1));
 
                 state.push(Piece::new(shape, orientation, x, y));
                 let new_m = Matrix::new(&state);
@@ -183,6 +190,8 @@ pub fn run() {
                     || (f64::consts::E.ln().ln() as f64) < -beta * (new_e - e.unwrap_or(0.0)) / e0
                 {
                     // Accept the move
+                    writeln!(&mut log_file, "Added {} at {:?}", shape.as_char(), (x, y))
+                        .expect("Couldn't write to log file?");
                 } else {
                     state = state0;
                 }
@@ -221,6 +230,7 @@ pub fn run() {
                     || (f64::consts::E.ln().ln() as f64) < -beta * (new_e - e.unwrap_or(0.0)) / e0
                 {
                     // Accept the move
+                    writeln!(&mut log_file, "Displac {k}").expect("Couldn't write to log file?");
                 } else {
                     state = state0;
                 }
@@ -254,6 +264,7 @@ pub fn run() {
                     || (f64::consts::E.ln().ln() as f64) < -beta * (new_e - e.unwrap_or(0.0)) / e0
                 {
                     // Accept the move
+                    writeln!(&mut log_file, "Rotate  {k}").expect("Couldn't write to log file?");
                 } else {
                     state = state0;
                 }

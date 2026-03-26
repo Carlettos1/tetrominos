@@ -178,7 +178,7 @@ state = list()
 Emin, step, best, best_step = None, 0, list(), None
 init_date = os.popen('date').read().strip()
 g = open('BEST.txt', 'w')
-while True:
+for _ in range(1_000_000):
       if step % 500 == 0: state = [ w for w in best ]
       M, E = Render(state), None
       if step % 5000 == 0: 
@@ -197,7 +197,7 @@ while True:
             g.flush()
             best_step = step
          if step % 100 == 0:
-            print ('step ', step, ':    E/E0 = ', E/E0, '   beta = ', beta, ' probs = ', p_displace, p_rotate, p_add, p_remove)
+            print ('step ', step, ':    E/E0 = ', E/E0, '   beta = ', beta, ' probs = ', p_displace, p_rotate, p_add, p_remove, f"{step=}")
             Visualize(M)
             print ()
             print ('Simulation started ', init_date)

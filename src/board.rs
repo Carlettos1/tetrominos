@@ -47,29 +47,52 @@ impl Matrix {
         let mut dirty_marks = 0;
         for piece in state {
             assert!(piece.rotation < piece.shape.get_rotations().len());
-            let placed_piece = piece.shape.get_rotations()[piece.rotation];
-            // las piezas son de a lo más de 4x4
-            println!("{piece:?}");
-            for dy in 0..piece.shape.get_dim(piece.rotation).1 {
-                // obtiene el iésimo número (e.g. 0x1234 da 4 para i=0, 3 para i=1, etc)
-                let piece_row = ((placed_piece >> (dy * 4)) & 0xF) << piece.x;
-                if (bits[piece.y + dy]) & piece_row != 0 {
-                    dirty_marks += 1;
-                    for col in 0..HEIGHT {
-                        if (piece_row & (1 << col)) >> col == 1 {
-                            matrix[piece.y + dy][col] = Escaque::Invalid;
+            let rotated_shape = piece.shape.get_rotations()[piece.rotation];
+            // la vida comienza de nuevo
+            // pos x of piece
+            let x = piece.x;
+            // pos y of piece
+            let y = piece.y;
+            // dim x of piece
+            let a = piece.shape.get_dim(piece.rotation).0;
+            // dim y of piece
+            let b = piece.shape.get_dim(piece.rotation).1;
+            for row in 0..b {
+                // S_i
+                let shape_row = (rotated_shape >> ((4 - 1 - row) * 4)) & 0xF;
+                // PS_i
+                let placed_shape_row = shape_row << (12 - x);
+                let row_collisions = bits[y + row] & placed_shape_row;
+                let row_collisions_number = row_collisions.count_ones();
+                if row_collisions_number != 0 {
+                    dirty_marks += row_collisions_number as usize;
+                    for j in x..(x + a) {
+                        if ((row_collisions >> (16 - 1 - j)) & 1) != 0 {
+                            matrix[y + row][j] = Escaque::Invalid;
+                        } else if ((placed_shape_row >> (16 - 1 - j)) & 1) != 0 {
+                            matrix[y + row][j] = Escaque::Piece(piece.shape);
                         }
                     }
                 } else {
-                    // no colission, just draw onto matrix
-                    for col in 0..HEIGHT {
-                        if (piece_row & (1 << col)) >> col == 1 {
-                            matrix[piece.y + dy][col] = Escaque::Piece(piece.shape);
+                    for j in x..(x + a) {
+                        if ((placed_shape_row >> (16 - 1 - j)) & 1) != 0 {
+                            matrix[y + row][j] = Escaque::Piece(piece.shape);
                         }
                     }
                 }
-                bits[piece.y + dy] |= piece_row;
+                bits[y + row] |= placed_shape_row;
             }
+            // las piezas son de a lo más de 4x4
+            #[cfg(debug_assertions)]
+            println!(
+                "{piece:?} \t<> {:?}",
+                (
+                    piece.x,
+                    piece.y,
+                    piece.x + piece.shape.get_dim(piece.rotation).0,
+                    piece.y + piece.shape.get_dim(piece.rotation).1
+                )
+            );
         }
         Self {
             matrix,
@@ -95,23 +118,24 @@ impl Matrix {
             return 1.0E+20;
         }
 
-        let mut ee = 0.0;
+        let mut energy = 0.0;
 
-        for j in 0..15 {
-            for i in 0..10 {
+        for j in 0..HEIGHT {
+            for i in 0..WIDTH {
                 match self.matrix[j][i] {
-                    Escaque::Invalid => ee += 5.0E+5,
-                    Escaque::Empty => (),
-                    Escaque::Piece(_) => {
+                    Escaque::Invalid => energy += 5.0E+5,
+                    Escaque::Piece(_) => (),
+                    Escaque::Empty => {
                         for other_j in 0..15 {
                             for other_i in 0..10 {
                                 if i != other_i
                                     && j != other_j
-                                    && matches!(self.matrix[other_j][other_i], Escaque::Piece(_))
+                                    && matches!(self.matrix[other_j][other_i], Escaque::Empty)
                                 {
-                                    ee += ((other_i as f64 - i as f64).powi(2)
-                                        + (other_j as f64 - j as f64).powi(2))
-                                    .powf(0.5 * ALPHA);
+                                    energy += ((other_i.abs_diff(i).pow(2)
+                                        + other_j.abs_diff(j).pow(2))
+                                        as f64)
+                                        .powf(0.5 * ALPHA);
                                 }
                             }
                         }
@@ -120,11 +144,11 @@ impl Matrix {
             }
         }
 
-        0.5 * ee
+        0.5 * energy
     }
 
     pub fn draw(&self) {
-        println!("----------------------------------");
+        println!("+--------------------------------+");
         for row in self.matrix.iter() {
             print!("|");
             for e in row.iter() {
@@ -132,7 +156,12 @@ impl Matrix {
             }
             println!("  |")
         }
-        println!("----------------------------------");
+        println!("+--------------------------------+");
+        // for row in self.bits.iter() {
+        //     println!("|        {row:016b}        |");
+        // }
+        // println!("+--------------------------------+");
+        // println!("Dirty marks: {}", self.dirty_marks);
     }
 }
 

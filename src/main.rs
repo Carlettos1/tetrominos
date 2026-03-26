@@ -17,6 +17,7 @@ const ALPHA: f64 = 3.0;
 
 fn main() {
     tetrominos::run();
+    //main2()
 }
 
 fn main2() {
